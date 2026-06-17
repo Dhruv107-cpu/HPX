@@ -20,27 +20,14 @@ class User(Base):
         default=uuid.uuid4
     )
 
-    name: Mapped[str] = mapped_column(
-        String(100)
-    )
-
-    email: Mapped[str] = mapped_column(
+    email_id: Mapped[str] = mapped_column(
         String(150),
         unique=True,
         nullable=False
     )
 
-    password_hash: Mapped[str] = mapped_column(
+    password: Mapped[str] = mapped_column(
         nullable=False
-    )
-
-    contact: Mapped[str] = mapped_column(
-        String(20)
-    )
-
-    role: Mapped[str] = mapped_column(
-        String(20),
-        default="USER"
     )
 
     is_active: Mapped[bool] = mapped_column(
