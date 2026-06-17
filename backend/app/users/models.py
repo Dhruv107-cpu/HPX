@@ -39,3 +39,7 @@ class User(Base):
         DateTime,
         default=datetime.utcnow
     )
+    role:Mapped[str]=mapped_column(
+        String(20),
+        default="USER"
+    )

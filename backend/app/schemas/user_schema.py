@@ -10,3 +10,7 @@ class UserLogin(BaseModel):
     email_id:EmailStr
     password:str
     
+
+class CreateUser(BaseModel):
+    email_id: EmailStr
+    password: str   
