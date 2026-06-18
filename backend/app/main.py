@@ -7,10 +7,20 @@ from app.users.models import User
 from app.auth.service import create_superadmin
 from app.auth.routes import router as auth_router
 from app.users.routes import router as user_router
+from fastapi.middleware.cors import CORSMiddleware
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="HPX Trade Analytics Dashboard"
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 app.include_router(auth_router)
 app.include_router(user_router)
