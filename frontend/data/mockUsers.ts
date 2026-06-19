@@ -1,8 +1,6 @@
-import { User } from "@/types/user";
-
-export const currentUser: User = {
+export const currentUser = {
   id: "1",
-  name: "Super Admin",
-  email: "admin@hpx.com",
+  email_id: "admin@hpx.com",
   role: "SUPERADMIN",
+  is_active: true,
 };
