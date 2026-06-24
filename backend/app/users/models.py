@@ -11,7 +11,6 @@ from sqlalchemy.orm import mapped_column
 
 from app.database.base import Base
 
-
 class User(Base):
     __tablename__ = "users"
 
@@ -39,7 +38,14 @@ class User(Base):
         DateTime,
         default=datetime.utcnow
     )
-    role:Mapped[str]=mapped_column(
+
+    role: Mapped[str] = mapped_column(
         String(20),
         default="USER"
+    )
+
+    username: Mapped[str] = mapped_column(
+        String(100),
+        unique=True,
+        nullable=True
     )

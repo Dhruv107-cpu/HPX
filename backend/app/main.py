@@ -4,6 +4,10 @@ from app.database.base import Base
 from app.database.database import engine, SessionLocal
 
 from app.users.models import User
+from app.analytics.models import UploadedFile
+from app.analytics.models import RegionCapacity
+from app.analytics.models import StateCapacity
+from app.analytics.routes import router as analytics_router
 from app.auth.service import create_superadmin
 from app.auth.routes import router as auth_router
 from app.users.routes import router as user_router
@@ -24,6 +28,9 @@ app.add_middleware(
 )
 app.include_router(auth_router)
 app.include_router(user_router)
+app.include_router(
+    analytics_router
+)
 
 
 @app.on_event("startup")

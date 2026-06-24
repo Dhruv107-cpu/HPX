@@ -20,45 +20,7 @@ router = APIRouter(
 )
 
 
-@router.post("/login")
-def login(
-    payload: UserLogin,
-    db: Session = Depends(get_db)
-):
 
-    user = (
-        db.query(User)
-        .filter(
-            User.email_id == payload.email_id
-        )
-        .first()
-    )
-
-    if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid Email"
-        )
-
-    if not verify_password(
-        payload.password,
-        user.password
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid Password"
-        )
-
-    access_token = create_access_token(
-        {
-            "sub": user.email_id
-        }
-    )
-
-    return {
-        "access_token": access_token,
-        "token_type": "bearer"
-    }
 @router.post("/login")
 def login(
     payload: UserLogin,
