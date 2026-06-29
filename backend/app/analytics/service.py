@@ -5,6 +5,9 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 import pandas as pd
+from fastapi import HTTPException
+from fastapi.responses import FileResponse
+
 
 from app.analytics.models import (
     UploadedFile,
@@ -115,10 +118,7 @@ def process_region_file(
         engine="xlrd"
     )
 
-    report_date = get_report_date_from_filename(
-        os.path.basename(file_path)
-    )
-
+    report_date = get_report_date_from_excel(df)
     current_region = None
 
     energy_columns = {}
@@ -158,6 +158,8 @@ def process_region_file(
                 str(region_value)
                 .strip()
             )
+            if current_region.upper() == "ALL INDIA":
+                continue
 
             if (
                 region_text
@@ -260,9 +262,8 @@ def process_state_file(
         engine="xlrd"
     )
 
-    report_date = get_report_date_from_filename(
-        os.path.basename(file_path)
-    )
+    report_date = get_report_date_from_excel(df)
+    
 
     current_state = None
 
@@ -424,7 +425,6 @@ def process_state_file(
     print(
         "STATE IMPORT COMPLETE"
     )
-
 def save_uploaded_files(
     files,
     current_user,
@@ -434,17 +434,6 @@ def save_uploaded_files(
     saved_files = []
 
     today = datetime.utcnow()
-
-    upload_dir = os.path.join(
-        "data",
-        str(today.year),
-        f"{today.month:02d}"
-    )
-
-    os.makedirs(
-        upload_dir,
-        exist_ok=True
-    )
 
     for file in files:
 
@@ -457,11 +446,29 @@ def save_uploaded_files(
             filename
         )
 
+        # Folder structure based on report month
+        folder_date = get_report_date_from_filename(
+            filename
+        )
+
+        upload_dir = os.path.join(
+            "data",
+            "capacity",
+            str(folder_date.year),
+            f"{folder_date.month:02d}"
+        )
+
+        os.makedirs(
+            upload_dir,
+            exist_ok=True
+        )
+
         file_path = os.path.join(
             upload_dir,
             filename
         )
 
+        # Save uploaded file
         with open(
             file_path,
             "wb"
@@ -471,6 +478,18 @@ def save_uploaded_files(
                 file.file.read()
             )
 
+        # Read Excel to get actual report date
+        df = pd.read_excel(
+            file_path,
+            header=None,
+            engine="xlrd"
+        )
+
+        report_date = get_report_date_from_excel(
+            df
+        )
+
+        # Detect file type
         if "capacity1" in filename.lower():
 
             file_type = "REGION"
@@ -496,7 +515,7 @@ def save_uploaded_files(
 
         if existing_file:
 
-            # deactivate previous version
+            # Deactivate previous version
             existing_file.is_active = False
 
             existing_file.updated_on = today
@@ -509,7 +528,7 @@ def save_uploaded_files(
                 current_user.username
             )
 
-            # remove old analytics data
+            # Remove previous analytics data
             db.query(
                 RegionCapacity
             ).filter(
@@ -534,11 +553,11 @@ def save_uploaded_files(
 
             file_type=file_type,
 
+            storage_path=file_path,
+
             is_active=True,
 
-            created_at=get_report_date_from_filename(
-                filename
-            ),
+            created_at=report_date,
 
             created_on=today,
 
@@ -546,7 +565,6 @@ def save_uploaded_files(
 
             uploaded_by_username=current_user.username,
 
-            # boss requirement
             updated_on=today,
 
             updated_by_email=current_user.email_id,
@@ -614,3 +632,79 @@ def save_uploaded_files(
         "files": saved_files,
         "uploaded_by": current_user.username
     }
+def download_uploaded_file(
+    file_id,
+    db: Session
+):
+
+    uploaded_file = (
+        db.query(
+            UploadedFile
+        )
+        .filter(
+            UploadedFile.id == file_id
+        )
+        .first()
+    )
+
+    if not uploaded_file:
+
+        raise HTTPException(
+            status_code=404,
+            detail="File not found"
+        )
+
+    if not os.path.exists(
+        uploaded_file.storage_path
+    ):
+
+        raise HTTPException(
+            status_code=404,
+            detail="Physical file not found"
+        )
+
+    return FileResponse(
+        path=uploaded_file.storage_path,
+        filename=uploaded_file.file_name,
+        media_type="application/octet-stream"
+    )
+def get_uploaded_files(
+    db: Session
+):
+
+    files = (
+        db.query(
+            UploadedFile
+        )
+        .order_by(
+            UploadedFile.created_on.desc()
+        )
+        .all()
+    )
+
+    return files
+def get_report_date_from_excel(df):
+
+    for row in range(5):
+
+        for col in range(min(5, len(df.columns))):
+
+            value = df.iloc[row, col]
+
+            if pd.notna(value):
+
+                text = str(value)
+
+                match = re.search(
+                    r"(\d{2}/\d{2}/\d{4})",
+                    text
+                )
+
+                if match:
+
+                    return datetime.strptime(
+                        match.group(1),
+                        "%d/%m/%Y"
+                    )
+
+    return datetime.utcnow()

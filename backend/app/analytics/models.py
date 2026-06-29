@@ -28,6 +28,9 @@ class UploadedFile(Base):
     file_type: Mapped[str] = mapped_column(
         String(50)
     )
+    storage_path: Mapped[str] = mapped_column(
+    String(500)
+    )
 
     
 
