@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { getCurrentUser } from "@/utils/auth";
 
 import Image from "next/image";
@@ -30,10 +30,30 @@ export default function Header({
     role?: string;
   } | null>(null);
   const [open, setOpen] = useState(false);
+  
+  // MODIFIED: Created a ref to track the user menu container
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setUser(getCurrentUser());
   }, []);
+
+  // MODIFIED: Added click listener to handle closing dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [open]);
 
   const handleLogout = () => {
     clearAuth();
@@ -100,7 +120,8 @@ export default function Header({
         </div>
 
         {/* User Menu */}
-        <div className="relative">
+        {/* MODIFIED: Attached dropdownRef here to capture interactions */}
+        <div className="relative" ref={dropdownRef}>
           {/* MODIFIED: Wrapped dropdown trigger in a group to show the User Profile Tooltip only when dropdown is closed */}
           <div className="relative group">
             <button

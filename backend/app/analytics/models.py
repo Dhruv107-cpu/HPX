@@ -204,5 +204,94 @@ class StateCapacity(Base):
         nullable=True
     )
 
+class DailyGeneration(Base):
+    __tablename__ = "daily_generation"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        
+        primary_key=True,
+        default=uuid.uuid4
+    )
+
+    upload_file_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("uploaded_files.id")
+    )
+
+    region: Mapped[str] = mapped_column(
+        String(100)
+    )
+
+    sector: Mapped[str] = mapped_column(
+        String(50)
+    )
+
+    installed_capacity_mw: Mapped[float] = mapped_column(
+        Float
+    )
+
+    monitored_capacity_mw: Mapped[float] = mapped_column(
+        Float
+    )
+
+    annual_target_mu: Mapped[float] = mapped_column(
+        Float
+    )
+
+   
+    today_program_mu: Mapped[float] = mapped_column(
+        Float
+    )
+
+    today_actual_mu: Mapped[float] = mapped_column(
+        Float
+    )
+
+    apr_program_mu: Mapped[float] = mapped_column(
+        Float
+    )
+
+    apr_actual_mu: Mapped[float] = mapped_column(
+        Float
+    )
+
+    deviation_mu: Mapped[float] = mapped_column(
+        Float
+    )
+
+    deviation_percent: Mapped[float] = mapped_column(
+        Float
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+    DateTime
+    )
+
+    created_on: Mapped[datetime] = mapped_column(
+    DateTime,
+    default=datetime.utcnow
+    )
+
+    uploaded_by_email: Mapped[str] = mapped_column(
+    String(255)
+    )
+
+    uploaded_by_username: Mapped[str] = mapped_column(
+    String(255)
+    )
+
+    updated_on: Mapped[datetime] = mapped_column(
+    DateTime,
+    nullable=True
+    )
+
+    updated_by_email: Mapped[str] = mapped_column(
+    String(255),
+    nullable=True
+    )
+
+    updated_by_username: Mapped[str] = mapped_column(
+    String(255),
+    nullable=True
+    )
     
 

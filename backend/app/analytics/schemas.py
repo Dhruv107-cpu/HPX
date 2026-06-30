@@ -50,3 +50,57 @@ class StateCapacitySummary(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class MonthlyRegionCapacity(BaseModel):
+    region: str
+    capacity: float
+
+
+class MonthlyRegionCapacitySummary(BaseModel):
+    month: str
+    regions: list[
+        MonthlyRegionCapacity
+    ]
+
+
+class MonthlyStateCapacity(BaseModel):
+    state: str
+    capacity: float
+
+
+class MonthlyStateCapacitySummary(BaseModel):
+    month: str
+    states: list[
+        MonthlyStateCapacity
+    ]
+class DGRSummary(BaseModel):
+
+    total_installed_capacity: float
+
+    total_monitored_capacity: float
+
+    today_program: float
+
+    today_actual: float
+
+    deviation: float
+
+    report_date: datetime
+
+
+class DGRRegionSummary(BaseModel):
+
+    name: str
+
+    installed_capacity: float
+
+    monitored_capacity: float
+
+    today_program: float
+
+    today_actual: float
+
+    deviation: float
+
+    deviation_percent: float

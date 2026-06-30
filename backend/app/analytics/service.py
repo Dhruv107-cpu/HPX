@@ -14,6 +14,7 @@ from app.analytics.models import (
     RegionCapacity,
     StateCapacity
 )
+from app.analytics.models import DailyGeneration
 
 ENERGY_MAPPING = {
 
@@ -77,6 +78,14 @@ REGIONS = {
     "Southern",
     "North Eastern"
 }
+valid_sectors = {
+    "THERMAL",
+    "NUCLEAR",
+    "HYDRO",
+    "TOTAL",
+    "Bhutan IMP.",
+    "R.E.S"
+}
 
 def get_report_date_from_filename(
     filename: str
@@ -104,6 +113,37 @@ def get_report_date_from_filename(
         )
 
     return datetime.utcnow()
+
+def get_month_window(
+    report_date: datetime
+):
+
+    month_start = datetime(
+        report_date.year,
+        report_date.month,
+        1
+    )
+
+    if report_date.month == 12:
+
+        next_month = datetime(
+            report_date.year + 1,
+            1,
+            1
+        )
+
+    else:
+
+        next_month = datetime(
+            report_date.year,
+            report_date.month + 1,
+            1
+        )
+
+    return (
+        month_start,
+        next_month
+    )
 
 def process_region_file(
     file_path,
@@ -498,16 +538,26 @@ def save_uploaded_files(
 
             file_type = "STATE"
 
+        elif "dgr1" in filename.lower():
+
+            file_type = "DGR"
+
         else:
 
             raise ValueError(
-                f"Unsupported file: {filename}"
+            f"Unsupported file: {filename}"
             )
+
+        month_start, next_month = get_month_window(
+            report_date
+        )
 
         existing_file = (
             db.query(UploadedFile)
             .filter(
-                UploadedFile.file_name == filename,
+                UploadedFile.file_type == file_type,
+                UploadedFile.created_at >= month_start,
+                UploadedFile.created_at < next_month,
                 UploadedFile.is_active == True
             )
             .first()
@@ -546,6 +596,14 @@ def save_uploaded_files(
             ).delete(
                 synchronize_session=False
             )
+            db.query(
+                DailyGeneration
+            ).filter(
+                DailyGeneration.upload_file_id == existing_file.id
+            ).delete(
+                synchronize_session=False
+            )
+
 
         upload_record = UploadedFile(
 
@@ -603,6 +661,14 @@ def save_uploaded_files(
             elif file_type == "STATE":
 
                 process_state_file(
+                    file_path,
+                    upload_file_id,
+                    current_user,
+                    db
+                )
+            elif file_type == "DGR":
+
+                process_dgr_file(
                     file_path,
                     upload_file_id,
                     current_user,
@@ -687,24 +753,160 @@ def get_report_date_from_excel(df):
 
     for row in range(5):
 
-        for col in range(min(5, len(df.columns))):
+        for col in range(len(df.columns)):
 
             value = df.iloc[row, col]
 
-            if pd.notna(value):
+            if pd.isna(value):
+                continue
 
-                text = str(value)
+            text = str(value)
 
-                match = re.search(
-                    r"(\d{2}/\d{2}/\d{4})",
-                    text
+            # Format: 31/05/2026
+            match = re.search(
+                r"(\d{2}/\d{2}/\d{4})",
+                text
+            )
+
+            if match:
+
+                return datetime.strptime(
+                    match.group(1),
+                    "%d/%m/%Y"
                 )
 
-                if match:
+            # Format: 24-Jun-2026
+            match = re.search(
+                r"(\d{2}-[A-Za-z]{3}-\d{4})",
+                text
+            )
 
-                    return datetime.strptime(
-                        match.group(1),
-                        "%d/%m/%Y"
-                    )
+            if match:
+
+                return datetime.strptime(
+                    match.group(1),
+                    "%d-%b-%Y"
+                )
 
     return datetime.utcnow()
+def process_dgr_file(
+    file_path,
+    upload_file_id,
+    current_user,
+    db: Session
+):
+
+    df = pd.read_excel(
+        file_path,
+        header=None,
+        engine="xlrd"
+    )
+
+    report_date = get_report_date_from_excel(df)
+
+    current_region = None
+
+    regions = [
+        "Northern",
+        "Western",
+        "Southern",
+        "Eastern",
+        "North Eastern",
+        "ALL INDIA"
+    ]
+
+    for index in range(6, len(df)):
+
+        value = df.iloc[index, 1]
+
+        if pd.isna(value):
+            continue
+
+        value = str(value).strip()
+
+        # Detect Region
+        if value in regions:
+
+            current_region = value
+
+            continue
+
+        if current_region is None:
+            continue
+
+        if value.upper() == "TOTAL":
+            sector = "Total"
+        elif value in valid_sectors:
+            sector = value
+        else:
+            continue
+
+        try:
+
+            record = DailyGeneration(
+
+                upload_file_id=upload_file_id,
+
+                region=current_region,
+
+                sector=sector,
+
+                installed_capacity_mw=parse_float(df.iloc[index, 5]),
+
+                monitored_capacity_mw=parse_float(df.iloc[index, 6]),
+
+                annual_target_mu=parse_float(df.iloc[index, 7]),
+
+                today_program_mu=parse_float(df.iloc[index, 8]),
+
+                today_actual_mu=parse_float(df.iloc[index, 9]),
+
+                apr_program_mu=parse_float(df.iloc[index, 10]),
+
+                apr_actual_mu=parse_float(df.iloc[index, 11]),
+
+                deviation_mu=parse_float(df.iloc[index, 12]),
+
+                deviation_percent=parse_float(df.iloc[index, 14]),
+
+                created_at=report_date,
+
+                created_on=datetime.utcnow(),
+
+                uploaded_by_email=current_user.email_id,
+
+                uploaded_by_username=current_user.username,
+
+                updated_on=datetime.utcnow(),
+
+                updated_by_email=current_user.email_id,
+
+                updated_by_username=current_user.username
+
+            )
+
+            db.add(record)
+
+        except Exception as e:
+
+            print(
+                f"DGR Error at row {index}: {e}"
+            )
+
+    print(
+        "DGR IMPORT COMPLETE"
+    )
+def parse_float(value):
+
+    if pd.isna(value):
+        return 0.0
+
+    try:
+
+        return float(
+            str(value).replace(",", "")
+        )
+
+    except:
+
+        return 0.0

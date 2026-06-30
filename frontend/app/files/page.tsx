@@ -12,6 +12,7 @@ const regionToStateMap: Record<string, string[]> = {
   All: [],
   REGION: [],
   STATE: [],
+  DGR:[],
 };
 
 export default function FilesPage() {
@@ -123,6 +124,7 @@ export default function FilesPage() {
               <option value="All">All Files</option>
               <option value="REGION">Region Files</option>
               <option value="STATE">State Files</option>
+              <option value="DGR">DGR files</option>
             </select>
           </div>
 

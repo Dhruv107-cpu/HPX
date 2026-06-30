@@ -10,6 +10,7 @@ import {
   FaUpload,
   FaRegFileAlt,
   FaUser,
+  FaRegChartBar,
 } from "react-icons/fa";
 
 interface SidebarProps {
@@ -50,7 +51,12 @@ export default function Sidebar({
       { name: "Installed Capacity", 
         icon: <FaChartBar />,
          href: "/installed-capacity" },
-    {
+
+         { name: "Daily Generation",
+           icon: <FaRegChartBar />,
+           href: "/daily-generation",  
+          },
+     {
       name: "Profile",
       icon: <FaUser />,
       href: "/profile",

@@ -232,7 +232,7 @@ export default function UsersPage() {
   return (
     <AppLayout>
       {/* Container wrapper ensuring main content section scrolls smoothly while layouts remain fixed */}
-      <div className="bg-white rounded-xl shadow-md p-6 max-h-[calc(100vh-120px)] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-md p-6 max-h-[calc(100vh-120px)] overflow-y-auto text-black">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">User Management</h1>
           <button

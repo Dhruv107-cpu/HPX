@@ -28,12 +28,20 @@ from app.analytics.service import (
 )
 from app.analytics.analytics_service import (
     get_region_capacity_summary,
-    get_state_capacity_summary
+    get_state_capacity_summary,
+    get_monthly_region_capacity_summary,
+    get_monthly_state_capacity_summary,
+     get_dgr_summary,
+    get_dgr_region_summary
 )
 
 from app.analytics.schemas import (
     RegionCapacitySummary,
-    StateCapacitySummary
+    StateCapacitySummary,
+    MonthlyRegionCapacitySummary,
+    MonthlyStateCapacitySummary,
+    DGRSummary,
+    DGRRegionSummary
 )
 
 router = APIRouter(
@@ -117,5 +125,64 @@ def state_capacity_summary(
 
     return get_state_capacity_summary(
         region,
+        db
+    )
+
+@router.get(
+    "/installed-capacity/monthly/regions",
+    response_model=list[
+        MonthlyRegionCapacitySummary
+    ]
+)
+def monthly_region_capacity_summary(
+    db: Session = Depends(
+        get_db
+    )
+):
+
+    return get_monthly_region_capacity_summary(
+        db
+    )
+
+@router.get(
+    "/installed-capacity/monthly/states",
+    response_model=list[
+        MonthlyStateCapacitySummary
+    ]
+)
+def monthly_state_capacity_summary(
+    region: str | None = None,
+    db: Session = Depends(
+        get_db
+    )
+):
+
+    return get_monthly_state_capacity_summary(
+        region,
+        db
+    )
+
+@router.get(
+    "/dgr/summary",
+    response_model=DGRSummary
+)
+def dgr_summary(
+    db: Session = Depends(get_db)
+):
+
+    return get_dgr_summary(
+        db
+    )
+
+
+@router.get(
+    "/dgr/regions",
+    response_model=list[DGRRegionSummary]
+)
+def dgr_region_summary(
+    db: Session = Depends(get_db)
+):
+
+    return get_dgr_region_summary(
         db
     )

@@ -1,11 +1,15 @@
 import pandas as pd
 
-pd.set_option("display.max_columns", None)
-
 df = pd.read_excel(
-    r"data\2026\06\capacity2-Northern-2026-05.xls",
+    r"D:\HPX\backend\data\capacity\2026\06\dgr1-2026-06-24 (2).xls",
     header=None,
     engine="xlrd"
 )
 
-print(df.iloc[:10])
+pd.set_option("display.max_columns", None)
+pd.set_option("display.max_rows", None)
+pd.set_option("display.width", None)
+
+for i in range(40):
+    print(f"\nROW {i}")
+    print(df.iloc[i].tolist())

@@ -49,3 +49,24 @@ export const getStateSummary =
 
     return response.data;
 };
+
+export const getMonthlyRegionSummary =
+  async () => {
+
+    const token =
+      localStorage.getItem(
+        "access_token"
+      );
+
+    const response =
+      await axios.get(
+        `${API}/analytics/installed-capacity/monthly/regions`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+    return response.data;
+};

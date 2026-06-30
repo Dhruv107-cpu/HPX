@@ -15,8 +15,7 @@ export default function AppLayout({
 }) {
   const router = useRouter();
 
-  const [sidebarOpen, setSidebarOpen] =
-    useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -25,25 +24,26 @@ export default function AppLayout({
   }, [router]);
 
   return (
-    <div className="min-h-screen flex">
+    // MODIFIED: Added h-screen, w-screen, and overflow-hidden to break layout stretching constraints
+    <div className="h-screen w-screen flex overflow-hidden bg-gray-50">
 
-      <Sidebar
-        open={sidebarOpen}
-      />
+      <Sidebar open={sidebarOpen} />
 
-      <div
-        className={`flex flex-col min-h-screen flex-1 transition-all duration-300`}
-      >
+      {/* MODIFIED: Handled layout structural columns using clean viewport dimension limits */}
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden transition-all duration-300">
+        
+        {/* Header now spans perfectly across 100% of the active flex area */}
         <Header
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
         />
 
-        <main className="flex-1 p-6 bg-gray-50">
+        {/* MODIFIED: main container now handles internal screen scrolling independently */}
+        <main className="flex-1 w-full overflow-y-auto p-6 bg-gray-50 custom-scrollbar">
           {children}
         </main>
 
-        <footer className="bg-white border-t text-center py-3 text-gray-500 text-sm">
+        <footer className="bg-white border-t text-center py-3 text-gray-500 text-sm w-full">
           © 2026 HPX Trade Analytics Dashboard
         </footer>
       </div>
