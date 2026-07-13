@@ -1,0 +1,7 @@
+# Database backups
+*.backup
+*.sql
+
+# Database folder backups
+database/*.backup
+database/*.sql
