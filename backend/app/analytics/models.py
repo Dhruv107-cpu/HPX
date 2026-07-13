@@ -1,11 +1,15 @@
 import uuid
 
 from datetime import datetime
+from sqlalchemy.sql import func
 
 from sqlalchemy import String
 from sqlalchemy import Float
-from sqlalchemy import DateTime
+from sqlalchemy import DateTime,Date
 from sqlalchemy import ForeignKey
+
+from sqlalchemy import Column, Integer
+
 
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
@@ -293,5 +297,90 @@ class DailyGeneration(Base):
     String(255),
     nullable=True
     )
-    
 
+
+
+class GenerationSummary(Base):
+    __tablename__ = "live_generation_summary"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Time when MERIT data represents
+    report_timestamp = Column(DateTime, nullable=False, index=True)
+
+    # Time when HPX fetched the data
+    fetched_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+        index=True,
+    )
+
+    # National KPIs
+    demand_met = Column(Float, nullable=False)
+
+    thermal_generation = Column(Float, nullable=False)
+
+    gas_generation = Column(Float, nullable=False)
+
+    nuclear_generation = Column(Float, nullable=False)
+
+    hydro_generation = Column(Float, nullable=False)
+
+    renewable_generation = Column(Float, nullable=False)
+
+    storage_generation = Column(Float, nullable=False)
+
+    other_generation = Column(Float, nullable=False)
+
+    transnational_exchange = Column(Float, nullable=False)
+    
+class PowerStationGeneration(Base):
+    __tablename__ = "power_station_generation"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    report_date = Column(Date, nullable=False)
+
+    state_code = Column(String(10), nullable=False)
+
+    station_name = Column(String(255), nullable=False)
+
+    generation_type = Column(String(50), nullable=False)
+
+    scheduled_generation = Column(Float, nullable=False)
+
+    non_scheduled_generation = Column(Float, nullable=False)
+
+    fetched_at = Column(DateTime, default=datetime.utcnow)
+class GenerationTrend(Base):
+    __tablename__ = "generation_trend"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    demand = Column(Float)
+
+    thermal = Column(Float)
+
+    hydro = Column(Float)
+
+    renewable = Column(Float)
+
+    gas = Column(Float)
+
+    nuclear = Column(Float)
+
+    storage = Column(Float)
+
+    other = Column(Float)
+
+    exchange = Column(Float)
+
+    fetched_at = Column(
+        DateTime,
+        server_default=func.now(),
+    )

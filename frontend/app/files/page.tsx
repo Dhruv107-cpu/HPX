@@ -6,6 +6,7 @@ import {
   getFiles,
   downloadFile
 } from "@/services/fileService";
+import { formatISTDate, formatISTDateTime } from "@/utils/dateTime";
 import { FaDownload } from "react-icons/fa";
 
 const regionToStateMap: Record<string, string[]> = {
@@ -41,23 +42,6 @@ export default function FilesPage() {
   const handleRegionChange = (region: string) => {
     setSelectedRegion(region);
     setSelectedState("All");
-  };
-
-  // Utility function to format timestamp as DD-MM-YYYY HH:MM:SS (24hr, No AM/PM)
-  const formatDateTimeCustom = (dateString: string | number | Date) => {
-    if (!dateString) return "N/A";
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return "N/A";
-
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const year = d.getFullYear();
-
-    const hours = String(d.getHours()).padStart(2, "0");
-    const minutes = String(d.getMinutes()).padStart(2, "0");
-    const seconds = String(d.getSeconds()).padStart(2, "0");
-
-    return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
   };
 
   const filteredFiles = files.filter((file) => {
@@ -200,7 +184,7 @@ export default function FilesPage() {
                       
                       {/* 1. DATE COLUMN */}
                       <td className="p-4 whitespace-nowrap font-medium text-slate-600">
-                        {file.created_at ? new Date(file.created_at).toLocaleDateString("en-GB").replace(/\//g, "-") : "N/A"}
+                        {formatISTDate(file.created_at, "N/A")}
                       </td>
 
                       {/* 2. TYPE COLUMN */}
@@ -236,7 +220,7 @@ export default function FilesPage() {
 
                       {/* 7. CREATED ON COLUMN */}
                       <td className="p-4 whitespace-nowrap text-slate-600 font-medium">
-                        {formatDateTimeCustom(file.created_on)}
+                        {formatISTDateTime(file.created_on, "N/A")}
                       </td>
 
                       {/* 8. ACTIONS COLUMN */}
@@ -316,12 +300,12 @@ export default function FilesPage() {
               <div>
                 <strong className="text-gray-500 block uppercase text-[10px] tracking-wider mb-0.5">Created At</strong>
                 <p className="text-black font-medium">
-                  {selectedFile.created_at ? new Date(selectedFile.created_at).toLocaleDateString("en-GB").replace(/\//g, "-") : "N/A"}
+                  {formatISTDate(selectedFile.created_at, "N/A")}
                 </p>
               </div>
               <div>
                 <strong className="text-gray-500 block uppercase text-[10px] tracking-wider mb-0.5">Created On</strong>
-                <p className="text-black font-medium">{formatDateTimeCustom(selectedFile.created_on)}</p>
+                <p className="text-black font-medium">{formatISTDateTime(selectedFile.created_on, "N/A")}</p>
               </div>
               <div>
                 <strong className="text-gray-500 block uppercase text-[10px] tracking-wider mb-0.5">Created By</strong>
@@ -333,7 +317,7 @@ export default function FilesPage() {
               </div>
               <div>
                 <strong className="text-gray-500 block uppercase text-[10px] tracking-wider mb-0.5">Updated On</strong>
-                <p className="text-black font-medium">{formatDateTimeCustom(selectedFile.updated_on)}</p>
+                <p className="text-black font-medium">{formatISTDateTime(selectedFile.updated_on, "N/A")}</p>
               </div>
               <div>
                 <strong className="text-gray-500 block uppercase text-[10px] tracking-wider mb-0.5">Updated By</strong>

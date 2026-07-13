@@ -1,12 +1,16 @@
-from sqlalchemy import func
+from sqlalchemy import func,and_
 from sqlalchemy.orm import Session
+from datetime import datetime, timedelta
 
 from app.analytics.models import (
     RegionCapacity,
     StateCapacity,
     UploadedFile,
-    DailyGeneration
+    DailyGeneration,
+    GenerationSummary,
+    PowerStationGeneration,
 )
+from app.analytics.schemas import LiveGenerationTrend
 
 
 def get_region_capacity_summary(
@@ -407,3 +411,287 @@ def get_dgr_region_summary(
         )
 
     return response
+
+
+
+
+
+def get_latest_live_generation_summary(db: Session):
+    """
+    Returns latest live generation snapshot.
+    """
+
+    return (
+        db.query(GenerationSummary)
+        .order_by(GenerationSummary.id.desc())
+        .first()
+    )
+
+
+def get_live_generation_trend(
+    db: Session,
+    interval: str,
+):
+    """
+    Returns historical trend data for charts.
+
+    Supported intervals:
+    - 15m
+    - hourly
+    - daily
+    - monthly
+    """
+
+    valid_intervals = {"15m", "hourly", "daily", "monthly"}
+
+    if interval not in valid_intervals:
+        raise ValueError("Invalid interval.")
+
+    # ==========================================================
+    # 15 Minute Trend (Last 24 Hours)
+    # ==========================================================
+    if interval == "15m":
+
+        start_time = datetime.utcnow() - timedelta(hours=24)
+
+        records = (
+            db.query(GenerationSummary)
+            .filter(
+                GenerationSummary.report_timestamp >= start_time
+            )
+            .order_by(
+                GenerationSummary.report_timestamp.asc()
+            )
+            .all()
+        )
+
+        return [
+            LiveGenerationTrend(
+                time=record.report_timestamp.strftime("%H:%M"),
+                demand_met=record.demand_met,
+            )
+            for record in records
+        ]
+
+    # ==========================================================
+    # Hourly Trend (Last 7 Days)
+    # ==========================================================
+    elif interval == "hourly":
+
+        start_time = datetime.utcnow() - timedelta(days=7)
+
+        # Latest timestamp for every hour
+        latest_per_hour = (
+            db.query(
+                func.date_trunc(
+                    "hour",
+                    GenerationSummary.report_timestamp
+                ).label("hour"),
+
+                func.max(
+                    GenerationSummary.report_timestamp
+                ).label("latest_timestamp"),
+            )
+            .filter(
+                GenerationSummary.report_timestamp >= start_time
+            )
+            .group_by(
+                func.date_trunc(
+                    "hour",
+                    GenerationSummary.report_timestamp
+                )
+            )
+            .subquery()
+        )
+
+        records = (
+            db.query(GenerationSummary)
+            .join(
+                latest_per_hour,
+                and_(
+                    GenerationSummary.report_timestamp
+                    == latest_per_hour.c.latest_timestamp
+                ),
+            )
+            .order_by(
+                GenerationSummary.report_timestamp.asc()
+            )
+            .all()
+        )
+
+        return [
+            LiveGenerationTrend(
+                time=record.report_timestamp.strftime("%d %b %H:00"),
+                demand_met=record.demand_met,
+            )
+            for record in records
+        ]
+
+        # ==========================================================
+    # Daily Trend (Last 30 Days)
+    # ==========================================================
+    elif interval == "daily":
+
+        start_time = datetime.utcnow() - timedelta(days=30)
+
+        latest_per_day = (
+            db.query(
+                func.date_trunc(
+                    "day",
+                    GenerationSummary.report_timestamp
+                ).label("day"),
+
+                func.max(
+                    GenerationSummary.report_timestamp
+                ).label("latest_timestamp"),
+            )
+            .filter(
+                GenerationSummary.report_timestamp >= start_time
+            )
+            .group_by(
+                func.date_trunc(
+                    "day",
+                    GenerationSummary.report_timestamp
+                )
+            )
+            .subquery()
+        )
+
+        records = (
+            db.query(GenerationSummary)
+            .join(
+                latest_per_day,
+                and_(
+                    GenerationSummary.report_timestamp
+                    == latest_per_day.c.latest_timestamp
+                ),
+            )
+            .order_by(
+                GenerationSummary.report_timestamp.asc()
+            )
+            .all()
+        )
+
+        return [
+            LiveGenerationTrend(
+                time=record.report_timestamp.strftime("%d %b"),
+                demand_met=record.demand_met,
+            )
+            for record in records
+        ]
+        # ==========================================================
+    # Monthly Trend (Last 12 Months)
+    # ==========================================================
+    elif interval == "monthly":
+
+        start_time = datetime.utcnow() - timedelta(days=365)
+
+        latest_per_month = (
+            db.query(
+                func.date_trunc(
+                    "month",
+                    GenerationSummary.report_timestamp
+                ).label("month"),
+
+                func.max(
+                    GenerationSummary.report_timestamp
+                ).label("latest_timestamp"),
+            )
+            .filter(
+                GenerationSummary.report_timestamp >= start_time
+            )
+            .group_by(
+                func.date_trunc(
+                    "month",
+                    GenerationSummary.report_timestamp
+                )
+            )
+            .subquery()
+        )
+
+        records = (
+            db.query(GenerationSummary)
+            .join(
+                latest_per_month,
+                and_(
+                    GenerationSummary.report_timestamp
+                    == latest_per_month.c.latest_timestamp
+                ),
+            )
+            .order_by(
+                GenerationSummary.report_timestamp.asc()
+            )
+            .all()
+        )
+
+        return [
+            LiveGenerationTrend(
+                time=record.report_timestamp.strftime("%b %Y"),
+                demand_met=record.demand_met,
+            )
+            for record in records
+        ]
+    return []
+from sqlalchemy import func
+
+
+def get_latest_power_station_data(
+    db: Session,
+    state_code: str | None = None,
+    generation_type: str | None = None,
+    limit: int = 20,
+):
+    """
+    Return the latest snapshot.
+    If state_code is provided, return the latest snapshot for that state.
+    Otherwise return the latest snapshot overall.
+    """
+
+    query = db.query(PowerStationGeneration)
+
+    if state_code:
+        latest_fetch_time = (
+            db.query(func.max(PowerStationGeneration.fetched_at))
+            .filter(
+                PowerStationGeneration.state_code == state_code
+            )
+            .scalar()
+        )
+
+        if latest_fetch_time is None:
+            return []
+
+        query = query.filter(
+            PowerStationGeneration.state_code == state_code,
+            PowerStationGeneration.fetched_at == latest_fetch_time,
+        )
+
+    else:
+        latest_fetch_time = (
+            db.query(func.max(PowerStationGeneration.fetched_at))
+            .scalar()
+        )
+
+        if latest_fetch_time is None:
+            return []
+
+        query = query.filter(
+            PowerStationGeneration.fetched_at == latest_fetch_time
+        )
+
+    if generation_type:
+        query = query.filter(
+            PowerStationGeneration.generation_type == generation_type
+        )
+
+    query = query.filter(
+        PowerStationGeneration.scheduled_generation > 0
+    )
+
+    return (
+        query.order_by(
+            PowerStationGeneration.scheduled_generation.desc()
+        )
+        .limit(limit)
+        .all()
+    )

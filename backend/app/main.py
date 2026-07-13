@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.analytics.routes import (
     router as analytics_router
 )
-
+from app.scheduler.router import router as scheduler_router
 
 # Syncs database schema models
 Base.metadata.create_all(bind=engine)
@@ -51,7 +51,7 @@ app.include_router(user_router)
 app.include_router(
     analytics_router
 )
-
+app.include_router(scheduler_router)
 
 @app.get("/")
 def root():

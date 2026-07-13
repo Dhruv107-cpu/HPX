@@ -1,7 +1,13 @@
 import os
 import re
-
-from datetime import datetime
+import requests
+import urllib3
+from datetime import datetime,timedelta
+from bs4 import BeautifulSoup
+from app.analytics.models import GenerationSummary
+from sqlalchemy import func
+from app.analytics.models import GenerationTrend
+from app.analytics.constants import STATE_MAPPING
 
 from sqlalchemy.orm import Session
 import pandas as pd
@@ -12,9 +18,12 @@ from fastapi.responses import FileResponse
 from app.analytics.models import (
     UploadedFile,
     RegionCapacity,
-    StateCapacity
+    StateCapacity,
+    DailyGeneration,
+    PowerStationGeneration
 )
-from app.analytics.models import DailyGeneration
+from app.analytics.constants import STATE_MAPPING
+
 
 ENERGY_MAPPING = {
 
@@ -85,6 +94,17 @@ valid_sectors = {
     "TOTAL",
     "Bhutan IMP.",
     "R.E.S"
+}
+TITLE_MAPPING = {
+    "DEMAND MET": "demand_met",
+    "THERMAL GENERATION": "thermal_generation",
+    "GAS GENERATION": "gas_generation",
+    "NUCLEAR GENERATION": "nuclear_generation",
+    "HYDRO GENERATION": "hydro_generation",
+    "RENEWABLE GENERATION": "renewable_generation",
+    "STORAGE GENERATION": "storage_generation",
+    "OTHER GENERATION": "other_generation",
+    "TRANS NATIONAL EXCHANGE": "transnational_exchange",
 }
 
 def get_report_date_from_filename(
@@ -910,3 +930,614 @@ def parse_float(value):
     except:
 
         return 0.0
+    
+# NOTE:
+# verify=False is used only for local development because
+# the local Python environment cannot validate the SSL certificate.
+# Remove before deployment.
+    
+MERIT_BASE_URL = "https://meritindia.in"
+SUMMARY_URL = f"{MERIT_BASE_URL}/Dashboard/BindAllIndiaMap"
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+def fetch_live_generation_summary():
+    response = requests.get(
+        SUMMARY_URL,
+        timeout=30,
+        verify=False   # Development only
+    )
+
+    response.raise_for_status()
+
+    return response.text
+def parse_live_generation_summary(html: str):
+    """
+    Parse MERIT dashboard HTML and return
+    a dictionary matching LiveGenerationSummary model.
+    """
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    summary = {}
+
+    cards = soup.find_all("div", class_="stat-card")
+
+    for card in cards:
+        title_div = card.find("div", class_="gen_title_sec")
+        value_span = card.find("span", class_="counter")
+
+        if not title_div or not value_span:
+            continue
+
+        # Convert title like:
+        # DEMAND<br>MET
+        # into
+        # DEMAND MET
+        title = title_div.get_text(" ", strip=True)
+
+        # Remove multiple spaces/newlines
+        title = re.sub(r"\s+", " ", title).upper()
+
+        # Example:
+        # "1,46,806" -> "146806"
+        value = value_span.get_text(strip=True)
+        value = value.replace(",", "").strip()
+
+        try:
+            value = float(value)
+        except ValueError:
+            value = 0.0
+
+        if title in TITLE_MAPPING:
+            summary[TITLE_MAPPING[title]] = value
+
+    return {
+        "report_timestamp": datetime.utcnow(),
+
+        "demand_met": summary.get("demand_met", 0),
+
+        "thermal_generation": summary.get("thermal_generation", 0),
+
+        "gas_generation": summary.get("gas_generation", 0),
+
+        "nuclear_generation": summary.get("nuclear_generation", 0),
+
+        "hydro_generation": summary.get("hydro_generation", 0),
+
+        "renewable_generation": summary.get("renewable_generation", 0),
+
+        "storage_generation": summary.get("storage_generation", 0),
+
+        "other_generation": summary.get("other_generation", 0),
+
+        "transnational_exchange": summary.get(
+            "transnational_exchange",
+            0,
+        ),
+    }
+def save_live_generation_summary(db, data):
+    """
+    Save parsed MERIT dashboard data into database.
+    """
+
+    record = GenerationSummary(**data)
+     # New history table
+    trend = GenerationTrend(
+        demand=data["demand_met"],
+        thermal=data["thermal_generation"],
+        hydro=data["hydro_generation"],
+        renewable=data["renewable_generation"],
+        gas=data["gas_generation"],
+        nuclear=data["nuclear_generation"],
+        storage=data["storage_generation"],
+        other=data["other_generation"],
+        exchange=data["transnational_exchange"],
+    )
+        
+
+    db.add(record)
+    db.add(trend)
+    db.commit()
+    db.refresh(record)
+
+    return record
+def fetch_power_station_data(state_code: str, report_date: str):
+    """
+    Fetch power station generation data from MERIT India.
+    """
+
+    session = requests.Session()
+
+    
+
+    state_code = state_code.lower().strip()
+
+    config = STATE_MAPPING.get(state_code)
+
+    if config is None:
+        raise ValueError(
+            f"Unsupported state code: {state_code}"
+        )
+
+    page_name = config["page"]
+
+    api_state_code = config["merit_code"]
+
+    # ---------------------------------------------------------
+    # STEP 1 : Open state page
+    # ---------------------------------------------------------
+
+    state_url = f"https://meritindia.in/state-data/{page_name}"
+
+    page = session.get(
+        state_url,
+        verify=False,
+        timeout=30,
+    )
+
+    page.raise_for_status()
+
+    soup = BeautifulSoup(page.text, "html.parser")
+
+    token = soup.find(
+        "input",
+        {"name": "__RequestVerificationToken"},
+    )
+
+    if token is None:
+        raise Exception("Unable to establish MERIT session.")
+
+    # ---------------------------------------------------------
+    # STEP 2 : Fetch data
+    # ---------------------------------------------------------
+
+    api_url = (
+        "https://meritindia.in/"
+        "StateWiseDetails/GetPowerStationData"
+    )
+
+    payload = {
+        "StateCode": api_state_code,
+        "date": report_date,
+    }
+
+    headers = {
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Content-Type": "application/json; charset=UTF-8",
+        "Origin": "https://meritindia.in",
+        "Referer": state_url,
+        "X-Requested-With": "XMLHttpRequest",
+    }
+
+    response = session.post(
+        api_url,
+        json=payload,
+        headers=headers,
+        timeout=30,
+        verify=False,
+    )
+
+    response.raise_for_status()
+
+    data = response.json()
+    
+    
+
+    if not isinstance(data, list):
+        raise Exception("Unexpected response received from MERIT.")
+
+    return data
+   
+def parse_power_station_data(
+    raw_data: list,
+    state_code: str,
+    report_date: str,
+):
+    """
+    Parse MERIT power station response into a normalized format.
+    """
+
+    parsed_data = []
+
+    for station in raw_data:
+
+        # Safe string extraction
+        station_name = (
+            station.get("PowerStationName") or ""
+        ).strip()
+
+        generation_type = (
+            station.get("TypeOfGeneration") or ""
+        ).strip()
+
+        # Safe numeric extraction
+        schedule_raw = station.get("Schedule")
+        non_schedule_raw = station.get("NonSchedule")
+
+        try:
+            scheduled_generation = (
+                float(
+                    str(schedule_raw)
+                    .replace(",", "")
+                    .strip()
+                )
+                if schedule_raw not in (None, "")
+                else 0.0
+            )
+        except (ValueError, TypeError):
+            scheduled_generation = 0.0
+
+        try:
+            non_scheduled_generation = (
+                float(
+                    str(non_schedule_raw)
+                    .replace(",", "")
+                    .strip()
+                )
+                if non_schedule_raw not in (None, "")
+                else 0.0
+            )
+        except (ValueError, TypeError):
+            non_scheduled_generation = 0.0
+
+        parsed_data.append(
+            {
+                "report_date": report_date,
+                "state_code": state_code,
+                "station_name": station_name,
+                "generation_type": generation_type,
+                "scheduled_generation": scheduled_generation,
+                "non_scheduled_generation": non_scheduled_generation,
+            }
+        )
+
+    return parsed_data
+def save_power_station_data(
+    db: Session,
+    parsed_data: list,
+):
+    """
+    Save parsed power station data into the database.
+    Each fetch is stored as a historical snapshot.
+    """
+
+    # Nothing to save
+    if not parsed_data:
+        return 0
+
+    # Skip snapshots where every station has zero scheduled generation
+    if all(
+        station["scheduled_generation"] == 0
+        for station in parsed_data
+    ):
+        raise ValueError(
+            "MERIT returned only zero generation values. Snapshot not saved."
+        )
+
+    saved_records = 0
+    fetch_time = datetime.utcnow()
+
+    for station in parsed_data:
+
+        record = PowerStationGeneration(
+            report_date=station["report_date"],
+            state_code=station["state_code"],
+            station_name=station["station_name"],
+            generation_type=station["generation_type"],
+            scheduled_generation=station["scheduled_generation"],
+            non_scheduled_generation=station["non_scheduled_generation"],
+            fetched_at=fetch_time,
+        )
+
+        db.add(record)
+        saved_records += 1
+
+    db.commit()
+
+    return saved_records
+
+def get_state_preview(
+    db: Session,
+    state_code: str,
+):
+    latest_fetch = (
+        db.query(func.max(PowerStationGeneration.fetched_at))
+        .filter(
+            PowerStationGeneration.state_code == state_code
+        )
+        .scalar()
+    )
+
+    if latest_fetch is None:
+        return None
+
+    stations = (
+        db.query(PowerStationGeneration)
+        .filter(
+            PowerStationGeneration.state_code == state_code,
+            PowerStationGeneration.fetched_at == latest_fetch,
+        )
+        .all()
+    )
+
+    total_generation = sum(
+        s.scheduled_generation
+        for s in stations
+    )
+
+    renewable = sum(
+        1
+        for s in stations
+        if s.generation_type.lower() == "renewable"
+    )
+
+    thermal = sum(
+        1
+        for s in stations
+        if s.generation_type.lower() != "renewable"
+    )
+
+    STATE_NAMES = {
+        "rj": "Rajasthan",
+        "mh": "Maharashtra",
+        "gj": "Gujarat",
+        "up": "Uttar Pradesh",
+        "mp": "Madhya Pradesh",
+        # We'll expand this later
+    }
+
+    return {
+        "state_name": STATE_MAPPING.get(
+            state_code,
+            {}
+        ).get(
+            "name",
+            state_code.upper(),
+        ),
+        "state_code": state_code,
+        "total_stations": len(stations),
+        "scheduled_generation": total_generation,
+        "renewable_stations": renewable,
+        "thermal_stations": thermal,
+    }
+def get_generation_trend(
+    db: Session,
+    limit: int = 20,
+):
+    records = (
+        db.query(GenerationTrend)
+        .order_by(
+            GenerationTrend.fetched_at.asc()
+        )
+        .limit(limit)
+        .all()
+    )
+
+    return [
+    {
+        "time": r.fetched_at.strftime("%H:%M"),
+
+        "demand_met": r.demand,
+
+        "thermal_generation": r.thermal,
+
+        "hydro_generation": r.hydro,
+
+        "renewable_generation": r.renewable,
+
+        "gas_generation": r.gas,
+
+        "nuclear_generation": r.nuclear,
+
+        "storage_generation": r.storage,
+
+        "other_generation": r.other,
+    }
+    for r in records
+]
+def get_power_station_portfolio(
+    db: Session,
+    state_code: str,
+):
+    latest_fetch = (
+        db.query(
+            func.max(
+                PowerStationGeneration.fetched_at
+            )
+        )
+        .filter(
+            PowerStationGeneration.state_code == state_code
+        )
+        .scalar()
+    )
+
+    if latest_fetch is None:
+        return None
+
+    stations = (
+        db.query(PowerStationGeneration)
+        .filter(
+            PowerStationGeneration.state_code == state_code,
+            PowerStationGeneration.fetched_at == latest_fetch,
+        )
+        .all()
+    )
+
+    total_scheduled_generation = sum(
+        station.scheduled_generation
+        for station in stations
+    )
+
+    total_non_scheduled_generation = sum(
+        station.non_scheduled_generation
+        for station in stations
+    )
+
+    thermal_generation = sum(
+        station.scheduled_generation
+        for station in stations
+        if station.generation_type.lower() == "thermal"
+    )
+
+    hydro_generation = sum(
+        station.scheduled_generation
+        for station in stations
+        if station.generation_type.lower() == "hydro"
+    )
+
+    renewable_generation = sum(
+        station.scheduled_generation
+        for station in stations
+        if station.generation_type.lower() == "renewable"
+    )
+
+    gas_generation = sum(
+        station.scheduled_generation
+        for station in stations
+        if station.generation_type.lower() == "gas"
+    )
+
+    nuclear_generation = sum(
+        station.scheduled_generation
+        for station in stations
+        if station.generation_type.lower() == "nuclear"
+    )
+
+    STATE_NAMES = {
+        "rj": "Rajasthan",
+        "mh": "Maharashtra",
+        "gj": "Gujarat",
+        "up": "Uttar Pradesh",
+        "mp": "Madhya Pradesh",
+    }
+
+    return {
+        "state_name": STATE_NAMES.get(
+            state_code,
+            state_code.upper(),
+        ),
+        "state_code": state_code,
+        "total_stations": len(stations),
+        "total_scheduled_generation": total_scheduled_generation,
+        "total_non_scheduled_generation": total_non_scheduled_generation,
+        "thermal_generation": thermal_generation,
+        "hydro_generation": hydro_generation,
+        "renewable_generation": renewable_generation,
+        "gas_generation": gas_generation,
+        "nuclear_generation": nuclear_generation,
+    }
+def fetch_all_power_station_data(
+    db: Session,
+    report_date: str,
+):
+    """
+    Fetch power station data for all supported states.
+
+    For every state:
+    - Try the requested report date.
+    - If MERIT has not yet published valid data,
+      automatically try previous dates.
+    """
+
+    records_saved = 0
+    states_processed = 0
+    failed_states = []
+
+    for internal_code, state in STATE_MAPPING.items():
+
+        try:
+
+            result = fetch_latest_state_data(
+                db=db,
+                state_code=internal_code,
+                report_date=report_date,
+            )
+
+            records_saved += result["records_saved"]
+
+            states_processed += 1
+
+        except Exception as e:
+
+            failed_states.append(
+                {
+                    "state_code": internal_code,
+                    "state_name": state["name"],
+                    "merit_code": state["merit_code"],
+                    "error": str(e),
+                }
+            )
+
+    return {
+        "status": "success",
+        "states_processed": states_processed,
+        "records_saved": records_saved,
+        "failed_states": failed_states,
+    }
+def fetch_latest_state_data(
+    db: Session,
+    state_code: str,
+    report_date: str,
+    max_days_back: int = 5,
+):
+    """
+    Fetch the latest available power station data for a state.
+
+    If MERIT has not yet published data for the requested date,
+    automatically check previous dates until valid generation
+    data is found or the retry limit is reached.
+    """
+
+    current_date = datetime.strptime(
+        report_date,
+        "%d %b %Y",
+    )
+
+    last_error = None
+
+    for _ in range(max_days_back):
+
+        current_report_date = current_date.strftime(
+            "%d %b %Y"
+        )
+
+        try:
+
+            raw_data = fetch_power_station_data(
+                state_code=state_code,
+                report_date=current_report_date,
+            )
+
+            parsed_data = parse_power_station_data(
+                raw_data=raw_data,
+                state_code=state_code,
+                report_date=current_report_date,
+            )
+            if not parsed_data:
+                current_date -= timedelta(days=1)
+                continue
+
+            saved = save_power_station_data(
+                db=db,
+                parsed_data=parsed_data,
+            )
+
+            return {
+                "records_saved": saved,
+                "report_date": current_report_date,
+            }
+
+        except ValueError as e:
+
+            last_error = str(e)
+
+            # Only retry if MERIT returned an all-zero snapshot
+            if "zero generation values" not in last_error.lower():
+                raise
+
+            current_date -= timedelta(days=1)
+
+    raise ValueError(
+        last_error
+        or "Unable to fetch valid data."
+    )

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { updateUser } from "@/services/userService"; 
+import { formatISTDate } from "@/utils/dateTime";
 import type { ApiUser } from "@/types/user";
 import axios from "axios"; 
 import { FaUserEdit, FaKey, FaEnvelope, FaPhone, FaBirthdayCake, FaIdCard, FaUserTag, FaCheckCircle, FaTimesCircle } from "react-icons/fa";
@@ -46,18 +47,6 @@ export default function ProfilePage() {
   });
 
   const [validationError, setValidationError] = useState("");
-
-  // Helper: Convert YYYY-MM-DD string to DD-MM-YYYY format
-  const formatDateToDDMMYYYY = (dateStr: string | undefined | null): string => {
-    if (!dateStr) return "-";
-    if (dateStr.includes("-")) {
-      const parts = dateStr.split("-");
-      if (parts.length === 3 && parts[0].length === 4) {
-        return `${parts[2]}-${parts[1]}-${parts[0]}`;
-      }
-    }
-    return dateStr;
-  };
 
   const fetchProfile = async () => {
     try {
@@ -264,7 +253,7 @@ export default function ProfilePage() {
               <FaBirthdayCake className="text-gray-400 mt-1.5 text-lg" />
               <div>
                 <label className="text-xs text-gray-400 block uppercase tracking-wider font-semibold">Date of Birth</label>
-                <p className="text-sm text-gray-800 mt-0.5">{formatDateToDDMMYYYY(user?.dob)}</p>
+                <p className="text-sm text-gray-800 mt-0.5">{formatISTDate(user?.dob)}</p>
               </div>
             </div>
 

@@ -11,6 +11,7 @@ import {
   FaRegFileAlt,
   FaUser,
   FaRegChartBar,
+  FaBolt,
 } from "react-icons/fa";
 
 interface SidebarProps {
@@ -48,6 +49,16 @@ export default function Sidebar({
        href: "/files",
         tooltip: "Access and organize repository documents" 
       },
+      {
+      name: "Live",
+      icon: <FaBolt />,
+      href: "/power",
+    },
+    {
+      name: "Power-Station",
+      icon: <FaChartBar />,
+      href: "/power-stations",
+    },
       { name: "Installed Capacity", 
         icon: <FaChartBar />,
          href: "/installed-capacity" },

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { getUsers, createUser, updateUser, deleteUser } from "@/services/userService";
+import { formatISTDateTime } from "@/utils/dateTime";
 import { FaEdit, FaTrash, FaPlus } from "react-icons/fa";
 
 interface ExtendedUserListItem {
@@ -214,21 +215,6 @@ export default function UsersPage() {
   const indexOfFirstUser = indexOfLastUser - usersPerPage;
   const currentUsers = filteredUsers.slice(indexOfFirstUser, indexOfLastUser);
     
-  const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "-";
-
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-
-    return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
-  };
-
   return (
     <AppLayout>
       {/* Container wrapper ensuring main content section scrolls smoothly while layouts remain fixed */}
@@ -379,7 +365,7 @@ export default function UsersPage() {
                         {user.is_active ? "Active" : "Inactive"}
                       </span>
                     </td>
-                    <td className="p-3">{user.created_at ? formatDateTime(user.created_at) : "-"}</td>
+                    <td className="p-3">{formatISTDateTime(user.created_at)}</td>
                     <td className="p-3">
                       <div className="flex justify-center gap-4">
                         <button 

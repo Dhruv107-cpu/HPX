@@ -22,6 +22,7 @@ import {
   getStateSummary,
 } from "@/services/installedCapacityService";
 import { getFiles } from "@/services/fileService";
+import { formatISTMonthYear } from "@/utils/dateTime";
 
 type RegionCapacity = {
   name: string;
@@ -79,17 +80,6 @@ const monthlyTrendMockData: Record<string, Array<{ month: string; installedMW: n
 };
 
 const regionColors = ["#005BAC", "#10B981", "#3B89D1", "#34D399", "#64748B"];
-
-const formatReportMonth = (dateValue: string) => {
-  const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) {
-    return "Unavailable";
-  }
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    year: "numeric",
-  }).format(date);
-};
 
 const RegionTooltip = ({
   active,
@@ -154,7 +144,7 @@ export default function InstalledCapacityPage() {
         )[0];
 
       if (latestCapacityFile?.created_at) {
-        setLatestReportMonth(formatReportMonth(latestCapacityFile.created_at));
+        setLatestReportMonth(formatISTMonthYear(latestCapacityFile.created_at));
       }
     } catch (err) {
       console.error(err);
